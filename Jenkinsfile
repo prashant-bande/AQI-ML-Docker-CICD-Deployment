@@ -26,14 +26,21 @@ pipeline {
             }
         }
         stage('DeployToProduction') {
-             steps {
+            steps {
                 input 'Deploy to Production?'
                 milestone(1)
-                kubernetesDeploy(
-                    kubeconfigId: 'kubeconfig',
-                    configs: 'ml-simple-kube.yml',
-                    enableConfigSubstitution: true
-                )
+                withCredentials([usernamePassword(credentialsId: 'webserver_login', usernameVariable: 'USERNAME', passwordVariable: 'USERPASS')]) {
+                    script {
+                        sh "sshpass -p '$USERPASS'  ssh -o StrictHostKeyChecking=no $USERNAME@$prod_ip \"docker pull prashantbande/simple-ml-app:${env.BUILD_NUMBER}\""
+                        try {
+                            sh "sshpass -p '$USERPASS'  ssh -o StrictHostKeyChecking=no $USERNAME@$prod_ip \"docker stop simple-ml-app\""
+                            sh "sshpass -p '$USERPASS'  ssh -o StrictHostKeyChecking=no $USERNAME@$prod_ip \"docker rm simple-ml-app\""
+                        } catch (err) {
+                            echo: 'caught error: $err'
+                        }
+                        sh "sshpass -p '$USERPASS'  ssh -o StrictHostKeyChecking=no $USERNAME@$prod_ip \"docker run --restart always --name simple-ml-app -p 5000:8080 -d prashantbande/simple-ml-app:${env.BUILD_NUMBER}\""
+                    }
+                }
             }
         }
     }
